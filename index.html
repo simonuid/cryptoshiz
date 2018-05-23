@@ -4,19 +4,21 @@
 <body>
 <script type="text/javascript">
   var url = "https://api.binance.com/api/v1/depth?symbol=BTCUSDT&limit=1000"
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = xhDone(xhttp);
-
-  xhttp.open("GET", url, true);
-  xhttp.setRequestHeader("Content-type", "application/json");
-  xhttp.onreadystatechange = xhDone(xhttp);
-  xhttp.send();
-  alert(xhttp.responseText);
-
-  function xhDone(xhttp) {
-    var response = JSON.parse(xhttp.responseText);
-    alert(response);
-  }
+  // var xhttp = new XMLHttpRequest();
+  // xhttp.open("GET", url, true);
+  // xhttp.setRequestHeader("Content-type", "application/json");
+  // xhttp.send();
+  // var response = JSON.parse(xhttp.responseText);
+  // alert(response);
+  var xmlhttp = new XMLHttpRequest();
+  xmlhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      displayProjects(JSON.parse(this.responseText));
+    }
+  };
+  xmlhttp.open('GET', url);
+  xmlhttp.send();
+  alert(xmlhttp.responseText)
 </script>
 </body>
 </html>
