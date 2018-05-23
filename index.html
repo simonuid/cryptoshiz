@@ -1,1 +1,15 @@
 <!-- don't judge my code pls -->
+<html>
+<head></head>
+<body>
+<script type="text/javascript">
+  const url = "https://www.binance.com/api/v1/depth?symbol=BTCUSDT&limit=1000"
+  var xhttp = new XMLHttpRequest();
+  xhttp.open("GET", url, true);
+  xhttp.setRequestHeader("Content-type", "application/json");
+  xhttp.send();
+  var response = JSON.parse(xhttp.responseText);
+  alert(response);
+</script>
+</body>
+</html>
