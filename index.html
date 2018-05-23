@@ -1,9 +1,11 @@
 <!-- don't judge my code pls -->
 <html>
-<head></head>
+<head>
+<meta http-equiv="Access-Control-Allow-Origin" content="*">
+</head>
 <body>
 <script type="text/javascript">
-  var url = "http://cors.io/?u=https://api.binance.com/api/v1/depth?symbol=BTCUSDT&limit=1000"
+  var url = "https://api.binance.com/api/v1/depth?symbol=BTCUSDT&limit=1000"
   // var xhttp = new XMLHttpRequest();
   // xhttp.open("GET", url, true);
   // xhttp.setRequestHeader("Content-type", "application/json");
@@ -18,6 +20,7 @@
     }
   };
   xmlhttp.open('GET', url);
+  // xmlhttp.setRequestHeader("Content-type", "application/json");
   xmlhttp.send();
 
 </script>
