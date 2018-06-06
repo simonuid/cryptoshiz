@@ -15,31 +15,32 @@
   var lastUpdated = 99999999999999999;
   var bids = {};
   var asks = {};
+  var groupedBids = {};
+  var groupedAsks = {};
+  var maxRows = 50;
+  var grouping = 10;
 
 
   var aggregateOrders = function(orders, precision, ceiling){
-      if (typeof ceiling === 'undefined') { optionalArg = false; }
+      if (typeof ceiling === 'undefined') { ceiling = false; }
       agg = {}
       for(var price in orders){
         // skip loop if the property is from prototype
         if (!orders.hasOwnProperty(price)) continue;
 
-        var aggPrice = 0;
+        var aggPrice;
 
         if(ceiling){
-          aggPrice = parseFloat(price) / precision;
+          aggPrice = Math.ceil( parseFloat(price) / precision ) * 1.0 * precision;
         } else {
-
+          aggPrice = Math.floor( parseFloat(price) / precision )* 1.0 * precision;
         }
 
-        /*
-
-        1234.56
-        1234.61
-
-        */
+        if(typeof agg[aggPrice] === 'undefined') agg[aggPrice] = 0;
+        agg[aggPrice] += parseFloat(orders[price]);
       }
 
+      return agg;
   }
 
   var updateDepth = function (d){
@@ -62,7 +63,7 @@
       }
 
       sortedAsks = {}
-      Object.keys(asks).sort(function(a,b) { return parseFloat(b) - parseFloat(a); }).forEach(function(price){
+      Object.keys(asks).sort(function(a,b) { return parseFloat(a) - parseFloat(b); }).forEach(function(price){
         sortedAsks[price] = asks[price];
       });
 
@@ -82,12 +83,11 @@
       }
 
       sortedBids = {}
-      Object.keys(bids).sort(function(a,b) { return parseFloat(a) - parseFloat(b); }).forEach(function(price){
+      Object.keys(bids).sort(function(a,b) { return parseFloat(b) - parseFloat(a); }).forEach(function(price){
         sortedBids[price] = bids[price];
       });
 
       bids = sortedBids;
-
       redraw();
     }
   }
@@ -120,19 +120,26 @@
       asks_tbody.removeChild(asks_tbody.firstChild);
     }
 
+    var i = 0;
     // console.log(document.getElementById('bids_table_body').innerHTML);
     for(price in bids){
+      if(i > maxRows) break;
+      i++;
       // console.log("Drawing bid");
-      var row = document.getElementById('bids_table').insertRow(0);
+      var row = document.getElementById('bids_table').insertRow(-1);
       var pr = row.insertCell(-1);
       var qu = row.insertCell(-1);
       pr.innerHTML = price;
       qu.innerHTML = bids[price];
     }
 
+    var j = 0;
+
     for(price in asks){
+      if(j > maxRows) break;
+      j++;
       // console.log("Drawing bid");
-      var row = document.getElementById('asks_table').insertRow(0);
+      var row = document.getElementById('asks_table').insertRow(-1);
       var pr = row.insertCell(-1);
       var qu = row.insertCell(-1);
       pr.innerHTML = price;
@@ -165,15 +172,29 @@
   xmlhttp.send();
 
 </script>
-<!-- <div id="groupings">
+<div id="groupings">
   Grouping:
   <a class="tag" href="#" id="pz1">0.01</a>
   <a class="tag" href="#" id="p1">0.1</a>
   <a class="tag" href="#" id="one">1</a>
   <a class="tag" href="#" id="ten">10</a>
   <a class="tag" href="#" id="hundred">100</a>
-</div> -->
-<h1>Binance BTCUSDT Order Book</h1>
+</div>
+Max Rows:
+<div class="select">
+  <select onchange="maxRows = this.value == 'all' ? 99999 : this.value; redraw();">
+    <option>25</option>
+    <option selected>50</option>
+    <option >100</option>
+    <option>250</option>
+    <option>500</option>
+    <option>1000</option>
+    <option value='all'>All (may rekt browser)</option>
+  </select>
+</div>
+<div>
+  <h1>Binance BTCUSDT Order Book</h1>
+</div>
 <div id="order_book" class="columns">
   <div id="bids" class="column is-half">
     Bids
