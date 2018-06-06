@@ -1,28 +1,136 @@
 <!-- don't judge my code pls -->
 <html>
 <head>
-<meta http-equiv="Access-Control-Allow-Origin" content="*">
+  <meta http-equiv="Access-Control-Allow-Origin" content="*">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Order Book</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.1/css/bulma.min.css">
+  <script defer src="https://use.fontawesome.com/releases/v5.0.7/js/all.js"></script>
 </head>
 <body>
 <script type="text/javascript">
-  var url = "https://api.binance.com/api/v1/depth?symbol=BTCUSDT&limit=1000"
-  // var xhttp = new XMLHttpRequest();
-  // xhttp.open("GET", url, true);
-  // xhttp.setRequestHeader("Content-type", "application/json");
-  // xhttp.send();
-  // var response = JSON.parse(xhttp.responseText);
-  // alert(response);
+  var url = "https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/depth?symbol=BTCUSDT&limit=1000";
+  var ws_url = "wss://stream.binance.com:9443/ws/btcusdt@depth";
+  var lastUpdated = 99999999999999999;
+  var bids = {};
+  var asks = {};
+
+
+  var aggregateOrders = function(orders, precision, ceiling){
+      if (typeof ceiling === 'undefined') { optionalArg = false; }
+      agg = {}
+      for(var price in orders){
+        // skip loop if the property is from prototype
+        if (!orders.hasOwnProperty(price)) continue;
+
+        var aggPrice = 0;
+
+        if(ceiling){
+          aggPrice = parseFloat(price) / precision;
+        } else {
+
+        }
+
+        /*
+
+        1234.56
+        1234.61
+
+        */
+      }
+
+  }
+
+  var updateDepth = function (d){
+    if(d.u <= lastUpdated) {
+      console.log("old update, dropping");
+    } else {
+      // console.log("Updating orders.");
+
+      for(level of d.a){
+        // console.log(d.a);
+        price = level[0]
+        quant = parseFloat(level[1]);
+        if(quant == 0.0){
+          // console.log("Zero quantity, removing " + level[0]);
+          delete asks[price];
+        } else {
+          // console.log("Updating " + price + "; old = " + asks[price] + ". New = " + quant);
+          asks[price] = quant;
+        }
+      }
+
+      for(level of d.b){
+        console.log(d.b);
+        price = level[0]
+        quant = parseFloat(level[1]);
+        if(quant == 0.0){
+          // console.log("Zero quantity, removing " + level[0]);
+          delete bids[price];
+        } else {
+          // console.log("Updating " + price + "; old = " + bids[price] + ". New = " + quant);
+          bids[price] = quant;
+        }
+      }
+      redraw();
+    }
+  }
+
+  var arrayToObj = function(arr){
+    obj = {}
+    for(el of arr){
+      obj[el[0]] = el[1]
+    }
+
+    return(obj);
+  }
+
+  var updateData = function(data){
+    lastUpdated = data.lastUpdateId;
+
+    bids = arrayToObj(data.bids);
+    asks = arrayToObj(data.asks);
+  }
+
+  var redraw = function(){
+    document.getElementById('bids').innerHTML = JSON.stringify(bids);
+    document.getElementById('asks').innerHTML = JSON.stringify(asks);
+  }
+
+
+  var sock = new WebSocket(ws_url);
+
+  sock.onmessage = function(msg){
+    data = JSON.parse(msg.data);
+    if(data.e == 'depthUpdate'){
+      updateDepth(data);
+    }
+  }
+
   var xmlhttp = new XMLHttpRequest();
   xmlhttp.onreadystatechange = function() {
     if (this.readyState == 4 && this.status == 200) {
-      alert(JSON.parse(this.responseText));
-
+      updateData(JSON.parse(this.responseText));
+      redraw();
     }
   };
+
   xmlhttp.open('GET', url);
-  // xmlhttp.setRequestHeader("Content-type", "application/json");
   xmlhttp.send();
 
 </script>
+<div id="groupings">
+  Grouping:
+  <a class="tag" href="#" id="pz1">0.01</a>
+  <a class="tag" href="#" id="p1">0.1</a>
+  <a class="tag" href="#" id="one">1</a>
+  <a class="tag" href="#" id="ten">10</a>
+  <a class="tag" href="#" id="hundred">100</a>
+</div>
+<div id="order_book" class="columns">
+  <div id="bids" class="column is-half"></div>
+  <div id="asks" class="column is-half"></div>
+</div>
 </body>
 </html>
