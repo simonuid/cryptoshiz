@@ -7,17 +7,34 @@
   <title>Live Order Book</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.1/css/bulma.min.css">
   <script defer src="https://use.fontawesome.com/releases/v5.0.7/js/all.js"></script>
+  <style type="text/css">
+    .askTr {
+      background-position: center;
+      background-repeat-x: no-repeat;
+      background-size: 0%;
+      background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==);
+      background-attachment: fixed;
+    }
+
+    .bidTr {
+      background-position: center;
+      background-repeat-x: no-repeat;
+      background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==);
+      background-size: 0%;
+      background-attachment: fixed;
+
+    }
+  </style>
 </head>
 <body>
 <script type="text/javascript">
   var symbol = ""
   var symbolsUrl = 'https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/exchangeInfo'
-
   var lastUpdated = 0;
   var bids = {};
   var asks = {};
-  var groupedBids = [];
-  var groupedAsks = [];
+  var groupedBids = {};
+  var groupedAsks = {};
   var maxRows = 50;
   var grouping = 0.00000001;
   var messageQueue = []
@@ -48,7 +65,6 @@
     document.getElementById("symbol").innerHTML = symbol;
     var ws_url_with_symbol = ws_url(symbol);
 
-    console.log(ws_url_with_symbol);
     openSocket(ws_url_with_symbol);
     xhrGet(url(symbol), updateData);
   }
@@ -68,13 +84,16 @@
       sel.add(option);
     }
 
+    sel.parentNode.className = 'select';
+
     sel.onchange=symbolChanged;
     // console.log(symbolList);
   }
 
   var aggregateOrders = function(orders, precision, ceiling){
       if (typeof ceiling === 'undefined') { ceiling = false; }
-      agg = {}
+      var agg = {};
+      var max = 0.0;
       var decimals = (precision.toString().split('.')[1] || []).length;
       for(var price in orders){
         // skip loop if the property is from prototype
@@ -94,9 +113,14 @@
         }
         agg[aggPrice][0] += parseFloat(orders[price]);
         if(typeof agg[aggPrice][1] === 'undefined') agg[aggPrice][1] = aggPrice.toFixed(8).toString();
+
+        max = Math.max(max, agg[aggPrice][0]);
       }
 
-      return Object.entries(agg).sort(function(a, b) { return parseFloat(a) - parseFloat(b); } );
+      return {
+        orders: Object.entries(agg).sort(function(a, b) { return parseFloat(a) - parseFloat(b); } ),
+        max: max
+      };
   }
 
   var processUpdates = function (){
@@ -179,8 +203,12 @@
     // clear table rows
     clearTable();
 
-    for(bid of groupedBids.reverse().slice(0,maxRows)){
+    var maxBid = groupedBids.max;
+    console.log(maxBid);
+    for(bid of groupedBids.orders.reverse().slice(0,maxRows)){
       var row = document.getElementById('bids_table').insertRow(-1);
+      row.className = 'bidTr';
+      row.style.backgroundSize =  100*bid[1][0]/maxBid + "%";
       var qu = row.insertCell(-1);
       var pr = row.insertCell(-1);
       pr.className = 'has-text-right';
@@ -189,8 +217,11 @@
       qu.innerHTML = bid[1][0].toFixed(8);
     }
 
-   for(ask of groupedAsks.slice(0,maxRows)){
+   var maxAsk = groupedAsks.max;
+   for(ask of groupedAsks.orders.slice(0,maxRows)){
       var row = document.getElementById('asks_table').insertRow(-1);
+      row.className = 'askTr';
+      row.style.backgroundSize = 100*ask[1][0]/maxAsk + "%";
       var pr = row.insertCell(-1);
       var qu = row.insertCell(-1);
       pr.innerHTML = ask[1][1];
@@ -212,28 +243,6 @@
       }
     }
   }
-
-
-  // var xmlhttp = new XMLHttpRequest();
-  // xmlhttp.onreadystatechange = function() {
-  //   if (this.readyState == 4 && this.status == 200) {
-  //     updateData(JSON.parse(this.responseText));
-  //     redraw();
-  //   }
-  // };
-
-  // xmlhttp.open('GET', url);
-  // xmlhttp.send();
-
-  // var xmlhttp2 = new XMLHttpRequest();
-  // xmlhttp2.onreadystatechange = function(){
-  //   if (this.readyState == 4 && this.status == 200) {
-  //     processExchangeInfo(JSON.parse(this.responseText));
-  //   }
-  // }
-
-  // xmlhttp2.open('GET', symbolsUrl);
-  // xmlhttp2.send();
 
   var xhrGet = function(url, callback){
     var xhttp = new XMLHttpRequest();
@@ -276,9 +285,9 @@ Max Rows:
   </select>
 </div>
 Symbol:
-<div class="select">
+<div class="select is-loading">
   <select id='symbol_select'>
-    <option>Select symbol...</option>
+    <option value="">Select symbol...</option>
   </select>
 </div>
 <div>
