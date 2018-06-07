@@ -11,6 +11,7 @@
 <body>
 <script type="text/javascript">
   var symbol = "BTCUSDT"
+  var symbolsUrl = 'https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/exchangeInfo'
   var url = "https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/depth?symbol=" + symbol + "&limit=1000";
   var ws_url = "wss://stream.binance.com:9443/ws/" + symbol.toLowerCase() + "@depth";
   var lastUpdated = 0;
@@ -22,6 +23,22 @@
   var grouping = 0.01;
   var messageQueue = []
 
+  var processExchangeInfo = function(data){
+    var symbolList = []
+    symbolsObj = data['symbols']
+    symbolsObj.forEach(function(s){
+      symbolList.push(s.symbol);
+    });
+
+    sel = document.getElementById('symbol_select');
+
+    for(sym of symbolList.sort()){
+      var option = document.createElement('option');
+      option.text = sym
+      sel.add(option);
+    }
+    // console.log(symbolList);
+  }
 
   var aggregateOrders = function(orders, precision, ceiling){
       if (typeof ceiling === 'undefined') { ceiling = false; }
@@ -199,6 +216,16 @@
   xmlhttp.open('GET', url);
   xmlhttp.send();
 
+  var xmlhttp2 = new XMLHttpRequest();
+  xmlhttp2.onreadystatechange = function(){
+    if (this.readyState == 4 && this.status == 200) {
+      processExchangeInfo(JSON.parse(this.responseText));
+    }
+  }
+
+  xmlhttp2.open('GET', symbolsUrl);
+  xmlhttp2.send();
+
 </script>
 <div id="groupings">
   Grouping:
@@ -218,6 +245,11 @@ Max Rows:
     <option>250</option>
     <option>500</option>
     <option value='all'>All (may rekt browser)</option>
+  </select>
+</div>
+Symbol:
+<div class="select">
+  <select id='symbol_select'>
   </select>
 </div>
 <div>
