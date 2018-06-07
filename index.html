@@ -10,18 +10,48 @@
 </head>
 <body>
 <script type="text/javascript">
-  var symbol = "BTCUSDT"
+  var symbol = ""
   var symbolsUrl = 'https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/exchangeInfo'
-  var url = "https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/depth?symbol=" + symbol + "&limit=1000";
-  var ws_url = "wss://stream.binance.com:9443/ws/" + symbol.toLowerCase() + "@depth";
+
   var lastUpdated = 0;
   var bids = {};
   var asks = {};
   var groupedBids = [];
   var groupedAsks = [];
   var maxRows = 50;
-  var grouping = 0.01;
+  var grouping = 0.00000001;
   var messageQueue = []
+  var sock;
+
+  var url = function(symbol){
+    return "https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/depth?symbol=" + symbol + "&limit=1000";
+  }
+
+  var ws_url = function(symbol){
+    return "wss://stream.binance.com:9443/ws/" + symbol.toLowerCase() + "@depth";
+  }
+
+
+  var symbolChanged = function (e){
+    if(typeof(sock) !== 'undefined'){
+      sock.close();
+    }
+    messageQueue = [];
+    lastUpdated = 0;
+    groupedBids = [];
+    groupedAsks = [];
+    bids = {};
+    asks = {};
+    clearTable();
+
+    symbol = e.target.value;
+    document.getElementById("symbol").innerHTML = symbol;
+    var ws_url_with_symbol = ws_url(symbol);
+
+    console.log(ws_url_with_symbol);
+    openSocket(ws_url_with_symbol);
+    xhrGet(url(symbol), updateData);
+  }
 
   var processExchangeInfo = function(data){
     var symbolList = []
@@ -37,6 +67,8 @@
       option.text = sym
       sel.add(option);
     }
+
+    sel.onchange=symbolChanged;
     // console.log(symbolList);
   }
 
@@ -61,7 +93,7 @@
           agg[aggPrice][0] = 0;
         }
         agg[aggPrice][0] += parseFloat(orders[price]);
-        if(typeof agg[aggPrice][1] === 'undefined') agg[aggPrice][1] = "$" + aggPrice.toFixed(decimals).toString();
+        if(typeof agg[aggPrice][1] === 'undefined') agg[aggPrice][1] = aggPrice.toFixed(8).toString();
       }
 
       return Object.entries(agg).sort(function(a, b) { return parseFloat(a) - parseFloat(b); } );
@@ -89,46 +121,27 @@
     } else {
       lastUpdated = d.u;
       for(level of d.a){
-        // console.log(d.a);
         price = level[0]
         quant = parseFloat(level[1]);
         if(quant == 0.0){
-          // console.log("Zero quantity, removing " + level[0]);
           delete asks[price];
         } else {
-          // console.log("Updating " + price + "; old = " + asks[price] + ". New = " + quant);
           asks[price] = quant;
         }
       }
 
-
-      // sortedAsks = {}
-      // Object.keys(asks).sort(function(a,b) { return parseFloat(a) - parseFloat(b); }).forEach(function(price){
-      //   sortedAsks[price] = asks[price];
-      // });
-
-      // asks = sortedAsks;
       groupedAsks = aggregateOrders(asks, grouping, true);
 
       for(level of d.b){
-        // console.log(d.b);
         price = level[0]
         quant = parseFloat(level[1]);
         if(quant == 0.0){
-          // console.log("Zero quantity, removing " + level[0]);
           delete bids[price];
         } else {
-          // console.log("Updating " + price + "; old = " + bids[price] + ". New = " + quant);
           bids[price] = quant;
         }
       }
 
-      // sortedBids = {}
-      // Object.keys(bids).sort(function(a,b) { return parseFloat(b) - parseFloat(a); }).forEach(function(price){
-      //   sortedBids[price] = bids[price];
-      // });
-
-      // bids = sortedBids;
       groupedBids = aggregateOrders(bids, grouping, false);
       redraw();
     }
@@ -150,8 +163,7 @@
     asks = arrayToObj(data.asks);
   }
 
-  var redraw = function(){
-    // clear table rows
+  var clearTable = function(){
     bids_tbody = document.getElementById('bids_table_body');
     while (bids_tbody.firstChild) {
       bids_tbody.removeChild(bids_tbody.firstChild);
@@ -161,13 +173,13 @@
     while (asks_tbody.firstChild) {
       asks_tbody.removeChild(asks_tbody.firstChild);
     }
+  }
 
-    // var i = 0;
-    // console.log(document.getElementById('bids_table_body').innerHTML);
+  var redraw = function(){
+    // clear table rows
+    clearTable();
+
     for(bid of groupedBids.reverse().slice(0,maxRows)){
-      // if(i > maxRows) return;
-      // i++;
-      // console.log("Drawing bid");
       var row = document.getElementById('bids_table').insertRow(-1);
       var qu = row.insertCell(-1);
       var pr = row.insertCell(-1);
@@ -177,58 +189,74 @@
       qu.innerHTML = bid[1][0].toFixed(8);
     }
 
-    // var j = 0;
-
-    for(ask of groupedAsks.slice(0,maxRows)){
-      // if(j > maxRows) break;
-      // j++;
-      // console.log("Drawing bid");
+   for(ask of groupedAsks.slice(0,maxRows)){
       var row = document.getElementById('asks_table').insertRow(-1);
       var pr = row.insertCell(-1);
       var qu = row.insertCell(-1);
       pr.innerHTML = ask[1][1];
       qu.innerHTML = ask[1][0].toFixed(8);
     }
-
-    // document.getElementById('bids').innerHTML = JSON.stringify(bids);
-    // document.getElementById('asks').innerHTML = JSON.stringify(asks);
   }
 
+  var openSocket = function(url){
+    if(typeof(sock) !== 'undefined'){
+      sock.close();
+    }
+    sock = new WebSocket(url);
 
-  var sock = new WebSocket(ws_url);
-
-  sock.onmessage = function(msg){
-    data = JSON.parse(msg.data);
-    if(data.e == 'depthUpdate'){
-      messageQueue.push(data);
-      processUpdates();
+    sock.onmessage = function(msg){
+      data = JSON.parse(msg.data);
+      if(data.e == 'depthUpdate'){
+        messageQueue.push(data);
+        processUpdates();
+      }
     }
   }
 
-  var xmlhttp = new XMLHttpRequest();
-  xmlhttp.onreadystatechange = function() {
-    if (this.readyState == 4 && this.status == 200) {
-      updateData(JSON.parse(this.responseText));
-      redraw();
-    }
-  };
 
-  xmlhttp.open('GET', url);
-  xmlhttp.send();
+  // var xmlhttp = new XMLHttpRequest();
+  // xmlhttp.onreadystatechange = function() {
+  //   if (this.readyState == 4 && this.status == 200) {
+  //     updateData(JSON.parse(this.responseText));
+  //     redraw();
+  //   }
+  // };
 
-  var xmlhttp2 = new XMLHttpRequest();
-  xmlhttp2.onreadystatechange = function(){
-    if (this.readyState == 4 && this.status == 200) {
-      processExchangeInfo(JSON.parse(this.responseText));
+  // xmlhttp.open('GET', url);
+  // xmlhttp.send();
+
+  // var xmlhttp2 = new XMLHttpRequest();
+  // xmlhttp2.onreadystatechange = function(){
+  //   if (this.readyState == 4 && this.status == 200) {
+  //     processExchangeInfo(JSON.parse(this.responseText));
+  //   }
+  // }
+
+  // xmlhttp2.open('GET', symbolsUrl);
+  // xmlhttp2.send();
+
+  var xhrGet = function(url, callback){
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        callback(JSON.parse(this.responseText));
+      }
     }
+
+    xhttp.open('GET', url);
+    xhttp.send();
   }
 
-  xmlhttp2.open('GET', symbolsUrl);
-  xmlhttp2.send();
-
+  xhrGet(symbolsUrl, processExchangeInfo);
 </script>
 <div id="groupings">
   Grouping:
+  <a class="tag" href="#" onclick="grouping = 0.00000001;">0.00000001</a>
+  <a class="tag" href="#" onclick="grouping = 0.0000001;">0.0000001</a>
+  <a class="tag" href="#" onclick="grouping = 0.000001;">0.000001</a>
+  <a class="tag" href="#" onclick="grouping = 0.00001;">0.00001</a>
+  <a class="tag" href="#" onclick="grouping = 0.0001;">0.0001</a>
+  <a class="tag" href="#" onclick="grouping = 0.001;">0.001</a>
   <a class="tag" href="#" onclick="grouping = 0.01;" id="pz1">0.01</a>
   <a class="tag" href="#" onclick="grouping = 0.1;" id="p1">0.1</a>
   <a class="tag" href="#" onclick="grouping = 1;" id="one">1</a>
@@ -250,10 +278,11 @@ Max Rows:
 Symbol:
 <div class="select">
   <select id='symbol_select'>
+    <option>Select symbol...</option>
   </select>
 </div>
 <div>
-  <h1>Binance BTCUSDT Order Book</h1>
+  <h1>Binance <span id="symbol"></span> Order Book</h1>
 </div>
 <div class="columns">
   <div class="column has-text-right">
