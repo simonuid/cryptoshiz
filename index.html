@@ -16,8 +16,8 @@
   var lastUpdated = 0;
   var bids = {};
   var asks = {};
-  var groupedBids = {};
-  var groupedAsks = {};
+  var groupedBids = [];
+  var groupedAsks = [];
   var maxRows = 50;
   var grouping = 0.01;
   var messageQueue = []
@@ -26,6 +26,7 @@
   var aggregateOrders = function(orders, precision, ceiling){
       if (typeof ceiling === 'undefined') { ceiling = false; }
       agg = {}
+      var decimals = (precision.toString().split('.')[1] || []).length;
       for(var price in orders){
         // skip loop if the property is from prototype
         if (!orders.hasOwnProperty(price)) continue;
@@ -38,11 +39,15 @@
           aggPrice = Math.floor( parseFloat(price) / precision )* 1.0 * precision;
         }
 
-        if(typeof agg[aggPrice] === 'undefined') agg[aggPrice] = 0;
-        agg[aggPrice] += parseFloat(orders[price]);
+        if(typeof agg[aggPrice] === 'undefined') {
+          agg[aggPrice] = [];
+          agg[aggPrice][0] = 0;
+        }
+        agg[aggPrice][0] += parseFloat(orders[price]);
+        if(typeof agg[aggPrice][1] === 'undefined') agg[aggPrice][1] = "$" + aggPrice.toFixed(decimals).toString();
       }
 
-      return agg;
+      return Object.entries(agg).sort(function(a, b) { return parseFloat(a) - parseFloat(b); } );
   }
 
   var processUpdates = function (){
@@ -52,6 +57,7 @@
       console.log('(still) waiting for full order book.');
     } else {
       updateOrders(messageQueue.shift());
+      if(messageQueue.length > 0) processUpdates();
     }
   }
 
@@ -78,13 +84,14 @@
         }
       }
 
-      // groupedAsks = aggregateOrders(asks, grouping, true);
-      sortedAsks = {}
-      Object.keys(asks).sort(function(a,b) { return parseFloat(a) - parseFloat(b); }).forEach(function(price){
-        sortedAsks[price] = asks[price];
-      });
 
-      asks = sortedAsks;
+      // sortedAsks = {}
+      // Object.keys(asks).sort(function(a,b) { return parseFloat(a) - parseFloat(b); }).forEach(function(price){
+      //   sortedAsks[price] = asks[price];
+      // });
+
+      // asks = sortedAsks;
+      groupedAsks = aggregateOrders(asks, grouping, true);
 
       for(level of d.b){
         // console.log(d.b);
@@ -99,12 +106,12 @@
         }
       }
 
-      sortedBids = {}
-      Object.keys(bids).sort(function(a,b) { return parseFloat(b) - parseFloat(a); }).forEach(function(price){
-        sortedBids[price] = bids[price];
-      });
+      // sortedBids = {}
+      // Object.keys(bids).sort(function(a,b) { return parseFloat(b) - parseFloat(a); }).forEach(function(price){
+      //   sortedBids[price] = bids[price];
+      // });
 
-      bids = sortedBids;
+      // bids = sortedBids;
       groupedBids = aggregateOrders(bids, grouping, false);
       redraw();
     }
@@ -138,30 +145,32 @@
       asks_tbody.removeChild(asks_tbody.firstChild);
     }
 
-    var i = 0;
+    // var i = 0;
     // console.log(document.getElementById('bids_table_body').innerHTML);
-    Object.keys(bids).forEach(function(price){
-      if(i > maxRows) return;
-      i++;
+    for(bid of groupedBids.reverse().slice(0,maxRows)){
+      // if(i > maxRows) return;
+      // i++;
       // console.log("Drawing bid");
       var row = document.getElementById('bids_table').insertRow(-1);
-      var pr = row.insertCell(-1);
       var qu = row.insertCell(-1);
-      pr.innerHTML = price;
-      qu.innerHTML = bids[price];
-    });
+      var pr = row.insertCell(-1);
+      pr.className = 'has-text-right';
+      qu.className = 'has-text-right';
+      pr.innerHTML = bid[1][1];
+      qu.innerHTML = bid[1][0].toFixed(8);
+    }
 
-    var j = 0;
+    // var j = 0;
 
-    for(price in asks){
-      if(j > maxRows) break;
-      j++;
+    for(ask of groupedAsks.slice(0,maxRows)){
+      // if(j > maxRows) break;
+      // j++;
       // console.log("Drawing bid");
       var row = document.getElementById('asks_table').insertRow(-1);
       var pr = row.insertCell(-1);
       var qu = row.insertCell(-1);
-      pr.innerHTML = price;
-      qu.innerHTML = asks[price];
+      pr.innerHTML = ask[1][1];
+      qu.innerHTML = ask[1][0].toFixed(8);
     }
 
     // document.getElementById('bids').innerHTML = JSON.stringify(bids);
@@ -191,14 +200,15 @@
   xmlhttp.send();
 
 </script>
-<!-- <div id="groupings">
+<div id="groupings">
   Grouping:
-  <a class="tag" href="#" id="pz1">0.01</a>
-  <a class="tag" href="#" id="p1">0.1</a>
-  <a class="tag" href="#" id="one">1</a>
-  <a class="tag" href="#" id="ten">10</a>
-  <a class="tag" href="#" id="hundred">100</a>
-</div> -->
+  <a class="tag" href="#" onclick="grouping = 0.01;" id="pz1">0.01</a>
+  <a class="tag" href="#" onclick="grouping = 0.1;" id="p1">0.1</a>
+  <a class="tag" href="#" onclick="grouping = 1;" id="one">1</a>
+  <a class="tag" href="#" onclick="grouping = 5;" id="one">5</a>
+  <a class="tag" href="#" onclick="grouping = 10;" id="ten">10</a>
+  <a class="tag" href="#" onclick="grouping = 100;" id="hundred">100</a>
+</div>
 Max Rows:
 <div class="select">
   <select onchange="maxRows = this.value == 'all' ? 99999 : this.value; redraw();">
@@ -213,17 +223,17 @@ Max Rows:
 <div>
   <h1>Binance BTCUSDT Order Book</h1>
 </div>
-<div id="order_book" class="columns">
-  <div id="bids" class="column is-half">
+<div class="columns">
+  <div class="column">
     Bids
-    <table id="bids_table">
+    <table id="bids_table" class='table is-bordered is-striped is-fullwidth is-narrow'>
       <tbody id='bids_table_body'>
       </tbody>
     </table>
   </div>
-  <div id="asks" class="column is-half">
+  <div class="column">
     Asks
-    <table id="asks_table">
+    <table id="asks_table" class='table is-bordered is-striped is-fullwidth is-narrow'>
       <tbody id='asks_table_body'>
       </tbody>
     </table>
