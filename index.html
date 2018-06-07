@@ -10,15 +10,17 @@
 </head>
 <body>
 <script type="text/javascript">
-  var url = "https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/depth?symbol=BTCUSDT&limit=1000";
-  var ws_url = "wss://stream.binance.com:9443/ws/btcusdt@depth";
-  var lastUpdated = 99999999999999999;
+  var symbol = "BTCUSDT"
+  var url = "https://cors-anywhere.herokuapp.com/https://api.binance.com/api/v1/depth?symbol=" + symbol + "&limit=1000";
+  var ws_url = "wss://stream.binance.com:9443/ws/" + symbol.toLowerCase() + "@depth";
+  var lastUpdated = 0;
   var bids = {};
   var asks = {};
   var groupedBids = {};
   var groupedAsks = {};
   var maxRows = 50;
-  var grouping = 10;
+  var grouping = 0.01;
+  var messageQueue = []
 
 
   var aggregateOrders = function(orders, precision, ceiling){
@@ -43,12 +45,26 @@
       return agg;
   }
 
-  var updateDepth = function (d){
-    if(d.u <= lastUpdated) {
-      console.log("old update, dropping");
+  var processUpdates = function (){
+    if(messageQueue.length == 0){
+      console.log('no messages to process!');
+    } else if (lastUpdated == 0) {
+      console.log('(still) waiting for full order book.');
     } else {
-      // console.log("Updating orders.");
+      updateOrders(messageQueue.shift());
+    }
+  }
 
+  var updateOrders = function(d) {
+    if(lastUpdated == 0) {
+      console.log("ruh-roh, still no full order book. this shouldn't happen!");
+    } else if(d.u <= lastUpdated) {
+      console.log("old update, dropping");
+    } else if(d.U > lastUpdated + 1 || d.u < lastUpdated + 1 ) {
+      // The first processed should have U <= lastUpdateId+1 AND u >= lastUpdateId+1
+      console.log("Assertion of U <= lastUpdateId+1 AND u >= lastUpdateId+1 failed 😞");
+    } else {
+      lastUpdated = d.u;
       for(level of d.a){
         // console.log(d.a);
         price = level[0]
@@ -62,6 +78,7 @@
         }
       }
 
+      // groupedAsks = aggregateOrders(asks, grouping, true);
       sortedAsks = {}
       Object.keys(asks).sort(function(a,b) { return parseFloat(a) - parseFloat(b); }).forEach(function(price){
         sortedAsks[price] = asks[price];
@@ -88,6 +105,7 @@
       });
 
       bids = sortedBids;
+      groupedBids = aggregateOrders(bids, grouping, false);
       redraw();
     }
   }
@@ -122,8 +140,8 @@
 
     var i = 0;
     // console.log(document.getElementById('bids_table_body').innerHTML);
-    for(price in bids){
-      if(i > maxRows) break;
+    Object.keys(bids).forEach(function(price){
+      if(i > maxRows) return;
       i++;
       // console.log("Drawing bid");
       var row = document.getElementById('bids_table').insertRow(-1);
@@ -131,7 +149,7 @@
       var qu = row.insertCell(-1);
       pr.innerHTML = price;
       qu.innerHTML = bids[price];
-    }
+    });
 
     var j = 0;
 
@@ -156,7 +174,8 @@
   sock.onmessage = function(msg){
     data = JSON.parse(msg.data);
     if(data.e == 'depthUpdate'){
-      updateDepth(data);
+      messageQueue.push(data);
+      processUpdates();
     }
   }
 
